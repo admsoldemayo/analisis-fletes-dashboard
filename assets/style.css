@@ -1,0 +1,243 @@
+/* Dashboard de Control de Fletes - Estilos */
+
+/* Font Awesome para iconos */
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css');
+
+/* Variables CSS */
+:root {
+    --color-primary: #2E7D32;
+    --color-secondary: #FFA000;
+    --color-danger: #D32F2F;
+    --color-success: #388E3C;
+    --color-warning: #F57C00;
+    --color-background: #F5F5F5;
+    --color-card: #FFFFFF;
+    --color-text: #212121;
+    --color-text-light: #757575;
+}
+
+/* Reset y base */
+body {
+    font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--color-background);
+    color: var(--color-text);
+}
+
+/* Cards */
+.card {
+    border: none;
+    border-radius: 12px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+.card-header {
+    background-color: transparent;
+    border-bottom: 1px solid #eee;
+    padding: 1rem 1.25rem;
+}
+
+/* KPI Cards */
+.kpi-card {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0.5rem 0;
+}
+
+.kpi-title {
+    font-size: 0.85rem;
+    color: var(--color-text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Botones */
+.btn {
+    border-radius: 8px;
+    padding: 0.5rem 1.25rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.btn-primary:hover {
+    background-color: #1B5E20;
+    border-color: #1B5E20;
+}
+
+.btn-warning {
+    background-color: var(--color-secondary);
+    border-color: var(--color-secondary);
+    color: white;
+}
+
+.btn-warning:hover {
+    background-color: #FF8F00;
+    border-color: #FF8F00;
+}
+
+/* Dropdowns */
+.Select-control {
+    border-radius: 8px !important;
+    border-color: #ddd !important;
+}
+
+.Select-control:hover {
+    border-color: var(--color-primary) !important;
+}
+
+/* DatePicker */
+.DateInput_input {
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+}
+
+/* Tablas */
+.dash-table-container {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.dash-header {
+    font-weight: 600 !important;
+}
+
+/* Gráficos */
+.js-plotly-plot {
+    border-radius: 8px;
+}
+
+/* Alertas y badges */
+.badge {
+    font-size: 0.85rem;
+    padding: 0.4em 0.8em;
+    border-radius: 20px;
+}
+
+/* Loading spinner */
+._dash-loading {
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+/* Tooltips */
+.tooltip-inner {
+    background-color: var(--color-text);
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+/* Scrollbar personalizada */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.card {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .kpi-value {
+        font-size: 1.5rem;
+    }
+
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Header personalizado */
+.dashboard-header {
+    background: linear-gradient(135deg, var(--color-primary) 0%, #1B5E20 100%);
+    color: white;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    border-radius: 0 0 20px 20px;
+}
+
+/* Indicadores de estado */
+.status-normal {
+    color: var(--color-success);
+}
+
+.status-warning {
+    color: var(--color-warning);
+}
+
+.status-danger {
+    color: var(--color-danger);
+}
+
+/* Footer */
+footer {
+    margin-top: 2rem;
+    padding: 1rem 0;
+    color: var(--color-text-light);
+    font-size: 0.85rem;
+}
+
+/* Modal */
+.modal-content {
+    border-radius: 12px;
+    border: none;
+}
+
+.modal-header {
+    border-bottom: 1px solid #eee;
+    background-color: var(--color-background);
+    border-radius: 12px 12px 0 0;
+}
+
+/* Filtros */
+.filter-section {
+    background-color: white;
+    padding: 1.25rem;
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+}
+
+.filter-label {
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
