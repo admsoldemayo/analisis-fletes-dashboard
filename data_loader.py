@@ -8,6 +8,7 @@ from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 import pandas as pd
 import os
+import json
 from datetime import datetime
 import re
 
@@ -45,18 +46,38 @@ class DataLoader:
         token_path = os.path.join(base_path, 'token.json')
         creds_path = os.path.join(base_path, 'credentials.json')
 
-        if os.path.exists(token_path):
+        # Intentar cargar desde variable de entorno (para Render)
+        token_json = os.environ.get('GOOGLE_TOKEN_JSON')
+        if token_json:
+            try:
+                token_data = json.loads(token_json)
+                creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+            except Exception as e:
+                print(f"Error cargando token desde env: {e}")
+
+        # Si no hay env var, intentar cargar desde archivo
+        if not creds and os.path.exists(token_path):
             creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
+                # Guardar token actualizado
+                if token_json:
+                    # En producción, solo refrescar en memoria
+                    pass
+                else:
+                    with open(token_path, 'w') as token:
+                        token.write(creds.to_json())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-                creds = flow.run_local_server(port=0)
-
-            with open(token_path, 'w') as token:
-                token.write(creds.to_json())
+                # Solo en desarrollo local
+                if os.path.exists(creds_path):
+                    flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                    with open(token_path, 'w') as token:
+                        token.write(creds.to_json())
+                else:
+                    raise Exception("No se encontraron credenciales. Configure GOOGLE_TOKEN_JSON en Render.")
 
         return creds
 

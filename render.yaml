@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: analisis-fletes-dashboard
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn dashboard:server --bind 0.0.0.0:$PORT
+    envVars:
+      - key: GOOGLE_TOKEN_JSON
+        sync: false

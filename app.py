@@ -69,18 +69,35 @@ def get_credentials():
     token_path = os.path.join(os.path.dirname(__file__), 'token.json')
     creds_path = os.path.join(os.path.dirname(__file__), 'credentials.json')
 
-    if os.path.exists(token_path):
+    # Intentar cargar desde variable de entorno (para Render)
+    token_json = os.environ.get('GOOGLE_TOKEN_JSON')
+    if token_json:
+        try:
+            token_data = json.loads(token_json)
+            creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+        except Exception as e:
+            print(f"Error cargando token desde env: {e}")
+
+    # Si no hay env var, intentar cargar desde archivo
+    if not creds and os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
+            # Solo guardar si es archivo local
+            if not token_json and os.path.exists(token_path):
+                with open(token_path, 'w') as token:
+                    token.write(creds.to_json())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-
-        with open(token_path, 'w') as token:
-            token.write(creds.to_json())
+            # Solo en desarrollo local
+            if os.path.exists(creds_path):
+                flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
+                creds = flow.run_local_server(port=0)
+                with open(token_path, 'w') as token:
+                    token.write(creds.to_json())
+            else:
+                raise Exception("No se encontraron credenciales. Configure GOOGLE_TOKEN_JSON en Render.")
 
     return creds
 
