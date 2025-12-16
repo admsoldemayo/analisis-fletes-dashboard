@@ -761,6 +761,9 @@ def ejecutar_todo(n_clicks):
     if not n_clicks:
         return ""
 
+    import time
+    DELAY_ENTRE_PASOS = 5  # segundos entre pasos para evitar quota exceeded
+
     resultados = []
     errores = []
 
@@ -779,6 +782,8 @@ def ejecutar_todo(n_clicks):
     except Exception as e:
         errores.append(f"Paso 0: {str(e)}")
 
+    time.sleep(DELAY_ENTRE_PASOS)
+
     # Paso 1: Asignar CPEs a Pesadas
     try:
         from app import asignar_cpes
@@ -793,6 +798,8 @@ def ejecutar_todo(n_clicks):
             errores.append(f"Paso 1: {res1['error']}")
     except Exception as e:
         errores.append(f"Paso 1: {str(e)}")
+
+    time.sleep(DELAY_ENTRE_PASOS)
 
     # Paso 2: Pesadas -> Fletes
     try:
@@ -809,6 +816,8 @@ def ejecutar_todo(n_clicks):
     except Exception as e:
         errores.append(f"Paso 2: {str(e)}")
 
+    time.sleep(DELAY_ENTRE_PASOS)
+
     # Paso 3: Descargas -> Fletes
     try:
         from app import matchear_descargas_fletes
@@ -823,6 +832,8 @@ def ejecutar_todo(n_clicks):
             errores.append(f"Paso 3: {res3['error']}")
     except Exception as e:
         errores.append(f"Paso 3: {str(e)}")
+
+    time.sleep(DELAY_ENTRE_PASOS)
 
     # Agente Inteligente
     try:
