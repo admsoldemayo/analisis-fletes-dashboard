@@ -690,28 +690,31 @@ def traer_cpes_a_fletes():
             m_cpes_actual = fila[CONFIG['FLETES_COL_M_CPES']] if len(fila) > CONFIG['FLETES_COL_M_CPES'] else ''
             m_cpes_actual = str(m_cpes_actual).strip()
 
-            # Clasificaciones manuales que NO deben sobrescribirse
+            # Clasificaciones manuales que NO deben sobrescribirse (comparar en lowercase)
             clasificaciones_manuales = [
-                'Traslado interno', 'Flete en B', 'Sin documentación',
-                'Pendiente de CPE', 'Error de carga', 'CPE Hecha por Terceros'
+                'traslado interno', 'flete en b', 'sin documentación',
+                'pendiente de cpe', 'error de carga', 'cpe hecha por terceros'
             ]
+            es_clasificacion_manual = m_cpes_actual.lower() in clasificaciones_manuales
 
             # Buscar en CPE por CTG
             if ctg_flete in cpe_por_ctg:
-                numero_cpe = cpe_por_ctg[ctg_flete]
-                actualizaciones_cpe.append({
-                    'range': celda_cpe,
-                    'values': [[numero_cpe]]
-                })
-                actualizaciones_match.append({
-                    'range': celda_match,
-                    'values': [['si']]
-                })
-                formatos_verde.append(celda_match)
+                # Si tiene CPE, escribir "si" SOLO si no es clasificación manual
+                if not es_clasificacion_manual:
+                    numero_cpe = cpe_por_ctg[ctg_flete]
+                    actualizaciones_cpe.append({
+                        'range': celda_cpe,
+                        'values': [[numero_cpe]]
+                    })
+                    actualizaciones_match.append({
+                        'range': celda_match,
+                        'values': [['si']]
+                    })
+                    formatos_verde.append(celda_match)
                 con_cpe += 1
             else:
                 # Solo escribir "no" si NO tiene una clasificación manual previa
-                if m_cpes_actual not in clasificaciones_manuales:
+                if not es_clasificacion_manual:
                     actualizaciones_match.append({
                         'range': celda_match,
                         'values': [['no']]
