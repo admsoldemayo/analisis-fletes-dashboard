@@ -931,7 +931,7 @@ def update_dashboard(start_date, end_date, transportistas, productos, origenes, 
     merma_prom = df['merma_pct'].mean() if df['merma_pct'].notna().any() else 0
 
     # Calcular fletes que NO llevan CPE (Traslado interno, Flete en B, etc.)
-    no_llevan_cpe_valores = ['Traslado interno', 'Flete en B', 'Sin documentación']
+    no_llevan_cpe_valores = ['Traslado interno', 'Flete en B', 'Sin documentación', 'CPE Hecha por Terceros']
     no_llevan_cpe = len(df[df['m_cpes'].isin(no_llevan_cpe_valores)]) if 'm_cpes' in df.columns else 0
 
     # Con CPE real = tienen CPE y NO están en la lista de "no llevan CPE"
@@ -963,12 +963,12 @@ def update_dashboard(start_date, end_date, transportistas, productos, origenes, 
     else:
         falta_pesadas = len(df[df['m_pesadas_num'].isna()]) if total > 0 else 0
 
-    # Falta Descargas = celdas vacías en M Descargas, excluyendo traslados internos y flete en B
-    # (los que NO tienen descargas Y no son traslados ni en B)
+    # Falta Descargas = celdas vacías en M Descargas, excluyendo traslados internos, flete en B y CPE terceros
+    # (los que NO tienen descargas Y no son traslados ni en B ni CPE de terceros)
     if 'm_cpes' in df.columns:
         falta_descargas = len(df[
             (df['m_descargas_num'].isna()) &
-            (~df['m_cpes'].isin(['Traslado interno', 'Flete en B']))
+            (~df['m_cpes'].isin(['Traslado interno', 'Flete en B', 'CPE Hecha por Terceros']))
         ]) if total > 0 else 0
     else:
         falta_descargas = len(df[df['m_descargas_num'].isna()]) if total > 0 else 0
@@ -1397,6 +1397,7 @@ def cargar_fletes_sin_cpe(n_clicks):
             {'label': 'Seleccionar...', 'value': ''},
             {'label': 'Traslado interno', 'value': 'Traslado interno'},
             {'label': 'Flete en B', 'value': 'Flete en B'},
+            {'label': 'CPE Hecha por Terceros', 'value': 'CPE Hecha por Terceros'},
             {'label': 'Sin documentación', 'value': 'Sin documentación'},
             {'label': 'Pendiente de CPE', 'value': 'Pendiente de CPE'},
             {'label': 'Error de carga', 'value': 'Error de carga'},

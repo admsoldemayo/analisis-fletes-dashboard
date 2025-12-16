@@ -686,6 +686,16 @@ def traer_cpes_a_fletes():
             celda_cpe = gspread.utils.rowcol_to_a1(idx, col_cpe)
             celda_match = gspread.utils.rowcol_to_a1(idx, col_match)
 
+            # Obtener valor actual de M CPE's para no sobrescribir clasificaciones manuales
+            m_cpes_actual = fila[CONFIG['FLETES_COL_M_CPES']] if len(fila) > CONFIG['FLETES_COL_M_CPES'] else ''
+            m_cpes_actual = str(m_cpes_actual).strip()
+
+            # Clasificaciones manuales que NO deben sobrescribirse
+            clasificaciones_manuales = [
+                'Traslado interno', 'Flete en B', 'Sin documentación',
+                'Pendiente de CPE', 'Error de carga', 'CPE Hecha por Terceros'
+            ]
+
             # Buscar en CPE por CTG
             if ctg_flete in cpe_por_ctg:
                 numero_cpe = cpe_por_ctg[ctg_flete]
@@ -700,11 +710,13 @@ def traer_cpes_a_fletes():
                 formatos_verde.append(celda_match)
                 con_cpe += 1
             else:
-                actualizaciones_match.append({
-                    'range': celda_match,
-                    'values': [['no']]
-                })
-                formatos_rojo.append(celda_match)
+                # Solo escribir "no" si NO tiene una clasificación manual previa
+                if m_cpes_actual not in clasificaciones_manuales:
+                    actualizaciones_match.append({
+                        'range': celda_match,
+                        'values': [['no']]
+                    })
+                    formatos_rojo.append(celda_match)
                 sin_cpe += 1
 
         # Aplicar actualizaciones en batch
