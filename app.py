@@ -701,38 +701,44 @@ def traer_cpes_a_fletes():
 
             # Obtener valor actual de M CPE's para no sobrescribir clasificaciones manuales
             m_cpes_actual = fila[CONFIG['FLETES_COL_M_CPES']] if len(fila) > CONFIG['FLETES_COL_M_CPES'] else ''
-            m_cpes_actual = str(m_cpes_actual).strip()
+            m_cpes_actual = str(m_cpes_actual).strip().lower()
 
-            # Clasificaciones manuales que NO deben sobrescribirse (comparar en lowercase)
-            clasificaciones_manuales = [
+            # Valores que NO deben sobrescribirse (clasificaciones manuales + si/no existentes)
+            valores_protegidos = [
                 'traslado interno', 'flete en b', 'sin documentación',
-                'pendiente de cpe', 'error de carga', 'cpe hecha por terceros'
+                'pendiente de cpe', 'error de carga', 'cpe hecha por terceros',
+                'si', 'no'  # tampoco sobrescribir si ya tiene si o no
             ]
-            es_clasificacion_manual = m_cpes_actual.lower() in clasificaciones_manuales
 
+            # Si ya tiene un valor protegido, no tocar esta fila
+            if m_cpes_actual in valores_protegidos:
+                if ctg_flete in cpe_por_ctg:
+                    con_cpe += 1
+                else:
+                    sin_cpe += 1
+                continue  # Saltar esta fila completamente
+
+            # Solo llegamos aquí si M CPE's está vacío o tiene otro valor no protegido
             # Buscar en CPE por CTG
             if ctg_flete in cpe_por_ctg:
-                # Si tiene CPE, escribir "si" SOLO si no es clasificación manual
-                if not es_clasificacion_manual:
-                    numero_cpe = cpe_por_ctg[ctg_flete]
-                    actualizaciones_cpe.append({
-                        'range': celda_cpe,
-                        'values': [[numero_cpe]]
-                    })
-                    actualizaciones_match.append({
-                        'range': celda_match,
-                        'values': [['si']]
-                    })
-                    formatos_verde.append(celda_match)
+                numero_cpe = cpe_por_ctg[ctg_flete]
+                actualizaciones_cpe.append({
+                    'range': celda_cpe,
+                    'values': [[numero_cpe]]
+                })
+                actualizaciones_match.append({
+                    'range': celda_match,
+                    'values': [['si']]
+                })
+                formatos_verde.append(celda_match)
                 con_cpe += 1
             else:
-                # Solo escribir "no" si NO tiene una clasificación manual previa
-                if not es_clasificacion_manual:
-                    actualizaciones_match.append({
-                        'range': celda_match,
-                        'values': [['no']]
-                    })
-                    formatos_rojo.append(celda_match)
+                # Escribir "no" solo si está vacío
+                actualizaciones_match.append({
+                    'range': celda_match,
+                    'values': [['no']]
+                })
+                formatos_rojo.append(celda_match)
                 sin_cpe += 1
 
         # Aplicar actualizaciones en batch
