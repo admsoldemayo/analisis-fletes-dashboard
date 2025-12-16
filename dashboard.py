@@ -762,7 +762,7 @@ def ejecutar_todo(n_clicks):
         return ""
 
     import time
-    DELAY_ENTRE_PASOS = 5  # segundos entre pasos para evitar quota exceeded
+    DELAY_ENTRE_PASOS = 15  # segundos entre pasos para evitar quota exceeded
 
     resultados = []
     errores = []
