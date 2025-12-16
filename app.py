@@ -505,12 +505,20 @@ def matchear_pesadas_fletes():
         if actualizaciones:
             hoja_fletes.batch_update(actualizaciones)
 
-            # Aplicar formato verde a las celdas actualizadas
-            for act in actualizaciones:
-                celda = act['range']
-                hoja_fletes.format(celda, {
-                    'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}  # #b6d7a8
-                })
+            # Aplicar formato verde a todas las celdas en un solo batch
+            if len(actualizaciones) > 0:
+                celdas = [act['range'] for act in actualizaciones]
+                # Agrupar en rangos para formatear de una sola vez (máximo 10 por llamada)
+                for i in range(0, len(celdas), 10):
+                    grupo = celdas[i:i+10]
+                    try:
+                        hoja_fletes.batch_format([{
+                            'range': celda,
+                            'format': {'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}}
+                        } for celda in grupo])
+                    except Exception:
+                        # Si batch_format no está disponible, formatear sin color
+                        pass
 
         return {
             'success': True,
@@ -605,15 +613,20 @@ def matchear_descargas_fletes():
                     'primera_actualizacion': actualizaciones[0] if actualizaciones else None
                 }
 
-            # Aplicar formato verde a las celdas actualizadas
-            for act in actualizaciones:
-                celda = act['range']
-                try:
-                    hoja_fletes.format(celda, {
-                        'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}  # #b6d7a8
-                    })
-                except Exception as format_error:
-                    print(f"Error formateando {celda}: {format_error}")
+            # Aplicar formato verde a todas las celdas en un solo batch
+            if len(actualizaciones) > 0:
+                celdas = [act['range'] for act in actualizaciones]
+                # Agrupar en rangos para formatear de una sola vez (máximo 10 por llamada)
+                for i in range(0, len(celdas), 10):
+                    grupo = celdas[i:i+10]
+                    try:
+                        hoja_fletes.batch_format([{
+                            'range': celda,
+                            'format': {'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}}
+                        } for celda in grupo])
+                    except Exception:
+                        # Si batch_format no está disponible, formatear sin color
+                        pass
 
         return {
             'success': True,
@@ -733,23 +746,29 @@ def traer_cpes_a_fletes():
                     'error': f'Error en batch_update: {str(batch_error)}'
                 }
 
-            # Aplicar formato verde a los "si"
-            for celda in formatos_verde:
-                try:
-                    hoja_fletes.format(celda, {
-                        'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}  # Verde claro
-                    })
-                except Exception as format_error:
-                    print(f"Error formateando verde {celda}: {format_error}")
+            # Aplicar formato verde a los "si" en batch
+            if formatos_verde:
+                for i in range(0, len(formatos_verde), 10):
+                    grupo = formatos_verde[i:i+10]
+                    try:
+                        hoja_fletes.batch_format([{
+                            'range': celda,
+                            'format': {'backgroundColor': {'red': 0.71, 'green': 0.84, 'blue': 0.66}}
+                        } for celda in grupo])
+                    except Exception:
+                        pass
 
-            # Aplicar formato rojo a los "no"
-            for celda in formatos_rojo:
-                try:
-                    hoja_fletes.format(celda, {
-                        'backgroundColor': {'red': 0.92, 'green': 0.6, 'blue': 0.6}  # Rojo claro
-                    })
-                except Exception as format_error:
-                    print(f"Error formateando rojo {celda}: {format_error}")
+            # Aplicar formato rojo a los "no" en batch
+            if formatos_rojo:
+                for i in range(0, len(formatos_rojo), 10):
+                    grupo = formatos_rojo[i:i+10]
+                    try:
+                        hoja_fletes.batch_format([{
+                            'range': celda,
+                            'format': {'backgroundColor': {'red': 0.92, 'green': 0.6, 'blue': 0.6}}
+                        } for celda in grupo])
+                    except Exception:
+                        pass
 
         return {
             'success': True,
