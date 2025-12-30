@@ -650,24 +650,23 @@ def ejecutar_asignar_cpe(n_clicks):
             detalles.append(html.Br())
             detalles.append(f"Ya tenían: {resultado['ya_tenian_cpe']}. Sin match: {resultado['sin_match']}")
 
-            # Mostrar info de patentes duplicadas si las hubo
-            if resultado.get('patentes_duplicadas', 0) > 0:
+            # Mostrar desglose de matches
+            detalles.append(html.Br())
+            detalles.append(html.Small([
+                html.I(className="fas fa-check-circle me-1 text-success"),
+                f"Únicos: {resultado.get('matches_unicos', 0)} | ",
+                f"Con empate (REVISAR): {resultado.get('matches_con_empate', 0)} | ",
+                f"Fuera de rango (>7 días): {resultado.get('fuera_de_rango', 0)}"
+            ], className="text-muted"))
+
+            # Si hay casos marcados para revisar
+            empates = resultado.get('matches_con_empate', 0)
+            if empates > 0:
                 detalles.append(html.Br())
                 detalles.append(html.Small([
-                    html.I(className="fas fa-info-circle me-1"),
-                    f"Patentes duplicadas: {resultado['patentes_duplicadas']}. ",
-                    f"Match producto+fecha: {resultado.get('matches_por_producto_fecha', 0)}. ",
-                    f"Solo fecha: {resultado.get('matches_por_fecha', 0)}"
-                ], className="text-muted"))
-
-                # Si hay duplicados procesados, mostrar cuántos para revisar
-                duplicados = resultado.get('duplicados_info', [])
-                if duplicados:
-                    detalles.append(html.Br())
-                    detalles.append(html.Small([
-                        html.I(className="fas fa-exclamation-triangle me-1 text-warning"),
-                        f"{len(duplicados)} asignaciones de patentes duplicadas - revisar en /duplicados"
-                    ], className="text-warning"))
+                    html.I(className="fas fa-exclamation-triangle me-1 text-warning"),
+                    f"{empates} casos marcados 'REVISAR' en columna T - verificar en Trabajo Manual > Duplicados"
+                ], className="text-warning"))
 
             return dbc.Alert(detalles, color="success", className="mb-0")
         else:

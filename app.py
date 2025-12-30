@@ -268,12 +268,36 @@ def calcular_diferencia_fechas(fecha1, fecha2):
         return float('inf')
 
 
+def calcular_dias_diferencia(fecha_pesada, fecha_cpe):
+    """
+    Calcula días de diferencia entre pesada y CPE.
+    Retorna número positivo si CPE es después de pesada (válido).
+    Retorna número negativo si CPE es antes de pesada (inválido).
+    """
+    if not fecha_pesada or not fecha_cpe:
+        return float('inf')
+    try:
+        dt_pesada = datetime.strptime(fecha_pesada, '%Y-%m-%d')
+        dt_cpe = datetime.strptime(fecha_cpe, '%Y-%m-%d')
+        return (dt_cpe - dt_pesada).days
+    except:
+        return float('inf')
+
+
 def asignar_cpes():
     """
     Proceso principal: asigna CPEs a Pesadas.
-    Match por patente, y cuando hay múltiples CPEs para la misma patente:
-    1. Filtra por producto (grano_tipo vs Producto)
-    2. Si quedan múltiples, elige el de fecha más cercana
+
+    LÓGICA:
+    1. Cargar CPEs ya asignadas (para no reutilizar - relación 1:1)
+    2. Para cada pesada sin CPE:
+       - Buscar CPEs con misma patente
+       - Filtrar por producto (palabra clave: maiz, soja, trigo, etc)
+       - Filtrar por fecha: CPE >= pesada Y CPE <= pesada + 7 días
+       - Excluir CPEs ya usadas
+       - Si 1 candidato: asignar
+       - Si 2+: asignar más cercana + marcar REVISAR
+       - Si 0: dejar vacío
     """
     try:
         creds = get_credentials()
@@ -291,22 +315,30 @@ def asignar_cpes():
         hoja_pesadas = ss_pesadas.worksheet(CONFIG['PESADAS_SHEET_NAME'])
         datos_pesadas = hoja_pesadas.get_all_values()
 
+        # PASO 1: Cargar CPEs ya asignadas (para no reutilizar)
+        cpes_ya_usadas = set()
+        for fila in datos_pesadas[1:]:
+            cpe_existente = fila[CONFIG['PESADAS_COL_CPE']] if len(fila) > CONFIG['PESADAS_COL_CPE'] else ''
+            if cpe_existente and str(cpe_existente).strip():
+                cpes_ya_usadas.add(str(cpe_existente).strip())
+
         # Estadísticas
         total_pesadas = 0
         ya_tenian_cpe = 0
         matches_nuevos = 0
-        matches_por_producto_fecha = 0  # Match por producto + fecha cercana
-        matches_por_fecha = 0           # Solo por fecha (producto no coincidió)
-        matches_unicos = 0              # Patente con un solo CPE
+        matches_unicos = 0              # 1 solo candidato
+        matches_con_empate = 0          # 2+ candidatos, se eligió más cercano
         sin_match = 0
+        fuera_de_rango = 0              # Candidatos pero fuera de 7 días
 
         # Lista para tracking de duplicados (para la página de control)
         duplicados_info = []
 
         # Batch de actualizaciones
-        actualizaciones = []
+        actualizaciones_cpe = []
+        actualizaciones_revisar = []
 
-        # Procesar cada pesada (saltar encabezado)
+        # PASO 2: Procesar cada pesada (saltar encabezado)
         for idx, fila in enumerate(datos_pesadas[1:], start=2):
             if len(fila) <= CONFIG['PESADAS_COL_PATENTE']:
                 continue
@@ -333,65 +365,96 @@ def asignar_cpes():
             fecha_pesada_norm = normalizar_fecha(fecha_pesada)
             producto_pesada_norm = normalizar_producto(producto_pesada)
 
-            if patente_norm and patente_norm in cpes:
-                lista_cpes = cpes[patente_norm]
-                numero_cpe = None
-                metodo_match = ''
-
-                if len(lista_cpes) == 1:
-                    # Solo 1 CPE para esta patente, usar directamente
-                    numero_cpe = lista_cpes[0]['numero_cpe']
-                    matches_unicos += 1
-                    metodo_match = 'unico'
-                else:
-                    # Múltiples CPEs: filtrar por producto primero
-                    cpes_mismo_producto = [c for c in lista_cpes if c['grano_tipo'] == producto_pesada_norm]
-
-                    if len(cpes_mismo_producto) == 1:
-                        # Solo 1 CPE con mismo producto
-                        numero_cpe = cpes_mismo_producto[0]['numero_cpe']
-                        matches_por_producto_fecha += 1
-                        metodo_match = 'producto'
-                    elif len(cpes_mismo_producto) > 1:
-                        # Múltiples con mismo producto: elegir fecha más cercana
-                        mejor_cpe = min(cpes_mismo_producto,
-                                       key=lambda x: calcular_diferencia_fechas(x['fecha'], fecha_pesada_norm))
-                        numero_cpe = mejor_cpe['numero_cpe']
-                        matches_por_producto_fecha += 1
-                        metodo_match = 'producto+fecha'
-                    else:
-                        # Ninguno coincide en producto: usar fecha más cercana de todos
-                        mejor_cpe = min(lista_cpes,
-                                       key=lambda x: calcular_diferencia_fechas(x['fecha'], fecha_pesada_norm))
-                        numero_cpe = mejor_cpe['numero_cpe']
-                        matches_por_fecha += 1
-                        metodo_match = 'solo_fecha'
-
-                    # Registrar info de duplicado para control
-                    duplicados_info.append({
-                        'fila': idx,
-                        'fecha_pesada': fecha_pesada,
-                        'producto_pesada': producto_pesada,
-                        'patente': patente_pesada,
-                        'neto': neto_pesada,
-                        'cpe_asignado': numero_cpe,
-                        'metodo': metodo_match,
-                        'opciones_cpe': len(lista_cpes)
-                    })
-
-                if numero_cpe:
-                    col_cpe = CONFIG['PESADAS_COL_CPE'] + 1
-                    actualizaciones.append({
-                        'range': f'{gspread.utils.rowcol_to_a1(idx, col_cpe)}',
-                        'values': [[numero_cpe]]
-                    })
-                    matches_nuevos += 1
-            else:
+            if not patente_norm or patente_norm not in cpes:
                 sin_match += 1
+                continue
+
+            lista_cpes = cpes[patente_norm]
+
+            # FILTRO 1: Excluir CPEs ya usadas
+            cpes_disponibles = [c for c in lista_cpes if c['numero_cpe'] not in cpes_ya_usadas]
+
+            if not cpes_disponibles:
+                sin_match += 1
+                continue
+
+            # FILTRO 2: Filtrar por producto (palabra clave)
+            cpes_mismo_producto = [c for c in cpes_disponibles if c['grano_tipo'] == producto_pesada_norm]
+
+            # Si no hay match por producto, intentar con todos
+            candidatos = cpes_mismo_producto if cpes_mismo_producto else cpes_disponibles
+
+            # FILTRO 3: Filtrar por fecha (CPE >= pesada, máximo 7 días)
+            cpes_en_rango = []
+            for c in candidatos:
+                dias = calcular_dias_diferencia(fecha_pesada_norm, c['fecha'])
+                if 0 <= dias <= 7:  # CPE mismo día o hasta 7 días después
+                    c['dias_diferencia'] = dias
+                    cpes_en_rango.append(c)
+
+            if not cpes_en_rango:
+                # Hay candidatos pero fuera de rango de fechas
+                if candidatos:
+                    fuera_de_rango += 1
+                else:
+                    sin_match += 1
+                continue
+
+            # ASIGNACIÓN
+            numero_cpe = None
+            marcar_revisar = False
+
+            if len(cpes_en_rango) == 1:
+                # Único candidato válido
+                numero_cpe = cpes_en_rango[0]['numero_cpe']
+                matches_unicos += 1
+            else:
+                # Múltiples candidatos: elegir fecha más cercana
+                cpes_en_rango.sort(key=lambda x: x['dias_diferencia'])
+                numero_cpe = cpes_en_rango[0]['numero_cpe']
+                matches_con_empate += 1
+                marcar_revisar = True
+
+                # Registrar info para control
+                duplicados_info.append({
+                    'fila': idx,
+                    'fecha_pesada': fecha_pesada,
+                    'producto_pesada': producto_pesada,
+                    'patente': patente_pesada,
+                    'neto': neto_pesada,
+                    'cpe_asignado': numero_cpe,
+                    'candidatos': len(cpes_en_rango),
+                    'opciones': [{'cpe': c['numero_cpe'], 'fecha': c['fecha'], 'dias': c['dias_diferencia']}
+                                for c in cpes_en_rango[:5]]
+                })
+
+            if numero_cpe:
+                # Marcar CPE como usada (para no reutilizar en esta corrida)
+                cpes_ya_usadas.add(numero_cpe)
+
+                # Agregar actualización de CPE
+                col_cpe = CONFIG['PESADAS_COL_CPE'] + 1
+                actualizaciones_cpe.append({
+                    'range': f'{gspread.utils.rowcol_to_a1(idx, col_cpe)}',
+                    'values': [[numero_cpe]]
+                })
+
+                # Si hay empate, marcar REVISAR en columna T
+                if marcar_revisar:
+                    col_verificado = CONFIG['PESADAS_COL_VERIFICADO'] + 1
+                    actualizaciones_revisar.append({
+                        'range': f'{gspread.utils.rowcol_to_a1(idx, col_verificado)}',
+                        'values': [['REVISAR']]
+                    })
+
+                matches_nuevos += 1
 
         # Aplicar actualizaciones en batch
-        if actualizaciones:
-            hoja_pesadas.batch_update(actualizaciones)
+        if actualizaciones_cpe:
+            hoja_pesadas.batch_update(actualizaciones_cpe)
+
+        if actualizaciones_revisar:
+            hoja_pesadas.batch_update(actualizaciones_revisar)
 
         return {
             'success': True,
@@ -401,10 +464,11 @@ def asignar_cpes():
             'ya_tenian_cpe': ya_tenian_cpe,
             'matches_nuevos': matches_nuevos,
             'matches_unicos': matches_unicos,
-            'matches_por_producto_fecha': matches_por_producto_fecha,
-            'matches_por_fecha': matches_por_fecha,
+            'matches_con_empate': matches_con_empate,
+            'fuera_de_rango': fuera_de_rango,
             'duplicados_info': duplicados_info,
-            'sin_match': sin_match
+            'sin_match': sin_match,
+            'cpes_ya_usadas': len(cpes_ya_usadas)
         }
 
     except Exception as e:
