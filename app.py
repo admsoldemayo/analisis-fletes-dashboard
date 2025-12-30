@@ -409,24 +409,35 @@ def asignar_cpes():
                 numero_cpe = cpes_en_rango[0]['numero_cpe']
                 matches_unicos += 1
             else:
-                # Múltiples candidatos: elegir fecha más cercana
+                # Múltiples candidatos: ordenar por fecha más cercana
                 cpes_en_rango.sort(key=lambda x: x['dias_diferencia'])
                 numero_cpe = cpes_en_rango[0]['numero_cpe']
-                matches_con_empate += 1
-                marcar_revisar = True
 
-                # Registrar info para control
-                duplicados_info.append({
-                    'fila': idx,
-                    'fecha_pesada': fecha_pesada,
-                    'producto_pesada': producto_pesada,
-                    'patente': patente_pesada,
-                    'neto': neto_pesada,
-                    'cpe_asignado': numero_cpe,
-                    'candidatos': len(cpes_en_rango),
-                    'opciones': [{'cpe': c['numero_cpe'], 'fecha': c['fecha'], 'dias': c['dias_diferencia']}
-                                for c in cpes_en_rango[:5]]
-                })
+                # Solo marcar REVISAR si hay empate real (2+ CPEs con la misma fecha)
+                dias_mejor = cpes_en_rango[0]['dias_diferencia']
+                cpes_mismo_dia = [c for c in cpes_en_rango if c['dias_diferencia'] == dias_mejor]
+
+                if len(cpes_mismo_dia) > 1:
+                    # Empate real: múltiples CPEs con la misma fecha más cercana
+                    matches_con_empate += 1
+                    marcar_revisar = True
+
+                    # Registrar info para control
+                    duplicados_info.append({
+                        'fila': idx,
+                        'fecha_pesada': fecha_pesada,
+                        'producto_pesada': producto_pesada,
+                        'patente': patente_pesada,
+                        'neto': neto_pesada,
+                        'cpe_asignado': numero_cpe,
+                        'candidatos': len(cpes_en_rango),
+                        'empate_real': len(cpes_mismo_dia),
+                        'opciones': [{'cpe': c['numero_cpe'], 'fecha': c['fecha'], 'dias': c['dias_diferencia']}
+                                    for c in cpes_en_rango[:5]]
+                    })
+                else:
+                    # Sin empate: hay un ganador claro (fecha más cercana)
+                    matches_unicos += 1
 
             if numero_cpe:
                 # Marcar CPE como usada (para no reutilizar en esta corrida)
