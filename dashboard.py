@@ -1123,10 +1123,14 @@ def toggle_modal(n_auto, n_close, is_open):
     prevent_initial_call=True
 )
 def cargar_duplicados(n_clicks):
+    """
+    Muestra solo los casos marcados "REVISAR" en columna T.
+    Estos son empates reales donde 2+ CPEs tienen la misma fecha más cercana.
+    """
     if not n_clicks:
         return "", "", ""
     try:
-        from app import cargar_cpes, get_credentials, normalizar_patente, normalizar_fecha, CONFIG
+        from app import cargar_cpes, get_credentials, normalizar_patente, normalizar_fecha, normalizar_producto, calcular_dias_diferencia, CONFIG
         import gspread
 
         creds = get_credentials()
@@ -1135,104 +1139,65 @@ def cargar_duplicados(n_clicks):
         # Cargar CPEs (indexado por patente)
         cpes = cargar_cpes(gc)
 
-        # Filtrar solo patentes con múltiples CPEs
+        # Contar patentes duplicadas
         patentes_duplicadas = {pat: lista for pat, lista in cpes.items() if len(lista) > 1}
 
-        if not patentes_duplicadas:
-            return (
-                dbc.Alert("No hay patentes duplicadas.", color="success"),
-                html.P("0 patentes con múltiples CPEs", className="text-muted"),
-                html.P("No hay duplicados para mostrar.", className="text-muted text-center py-4")
-            )
-
-        # Cargar Pesadas para encontrar las que tienen patente duplicada y NO coinciden en fecha
+        # Cargar Pesadas
         ss_pesadas = gc.open_by_key(CONFIG['PESADAS_SPREADSHEET_ID'])
         hoja_pesadas = ss_pesadas.worksheet(CONFIG['PESADAS_SHEET_NAME'])
         datos_pesadas = hoja_pesadas.get_all_values()
 
-        # Primero: recolectar todos los CPEs que ya fueron verificados (asignados a filas con OK)
-        cpes_verificados = set()
-        for fila in datos_pesadas[1:]:
-            verificado = fila[CONFIG['PESADAS_COL_VERIFICADO']] if len(fila) > CONFIG['PESADAS_COL_VERIFICADO'] else ''
-            cpe_asignado = fila[CONFIG['PESADAS_COL_CPE']] if len(fila) > CONFIG['PESADAS_COL_CPE'] else ''
-            if verificado and str(verificado).strip().upper() == 'OK' and cpe_asignado:
-                cpes_verificados.add(str(cpe_asignado).strip())
-
-        # Buscar pesadas con patente duplicada donde la fecha NO coincide exactamente
-        casos_revisar = []  # Lista de {fila, patente, fecha_pesada, cpe_asignado, cpes_disponibles}
+        # Buscar pesadas marcadas como "REVISAR" en columna T
+        casos_revisar = []
 
         for idx, fila in enumerate(datos_pesadas[1:], start=2):
-            if len(fila) <= CONFIG['PESADAS_COL_PATENTE']:
+            if len(fila) <= CONFIG['PESADAS_COL_VERIFICADO']:
+                continue
+
+            verificado = fila[CONFIG['PESADAS_COL_VERIFICADO']] if len(fila) > CONFIG['PESADAS_COL_VERIFICADO'] else ''
+
+            # Solo mostrar los marcados como REVISAR
+            if str(verificado).strip().upper() != 'REVISAR':
                 continue
 
             fecha_pesada = fila[CONFIG['PESADAS_COL_FECHA']] if len(fila) > CONFIG['PESADAS_COL_FECHA'] else ''
             patente_pesada = fila[CONFIG['PESADAS_COL_PATENTE']] if len(fila) > CONFIG['PESADAS_COL_PATENTE'] else ''
             cpe_asignado = fila[CONFIG['PESADAS_COL_CPE']] if len(fila) > CONFIG['PESADAS_COL_CPE'] else ''
             producto_pesada = fila[CONFIG['PESADAS_COL_PRODUCTO']] if len(fila) > CONFIG['PESADAS_COL_PRODUCTO'] else ''
+            neto_pesada = fila[CONFIG['PESADAS_COL_NETO']] if len(fila) > CONFIG['PESADAS_COL_NETO'] else ''
 
-            if not patente_pesada or not cpe_asignado:
-                continue
-
-            # Verificar si ya fue marcado como OK
-            verificado = fila[CONFIG['PESADAS_COL_VERIFICADO']] if len(fila) > CONFIG['PESADAS_COL_VERIFICADO'] else ''
-            if verificado and str(verificado).strip().upper() == 'OK':
-                continue
-
+            # Buscar CPEs alternativas para esta patente
             patente_norm = normalizar_patente(patente_pesada)
             fecha_pesada_norm = normalizar_fecha(fecha_pesada)
-
-            # Solo nos interesan las patentes duplicadas
-            if patente_norm not in patentes_duplicadas:
-                continue
-
-            lista_cpes_original = patentes_duplicadas[patente_norm]
-
-            # Filtrar CPEs que ya fueron verificados (asignados a otras pesadas con OK)
-            lista_cpes = [cpe for cpe in lista_cpes_original
-                         if cpe['numero_cpe'] not in cpes_verificados]
-
-            # Si quedó solo 1 CPE después de filtrar verificados, ya no hay ambigüedad
-            if len(lista_cpes) <= 1:
-                continue
-
-            # Normalizar producto de la pesada
-            from app import normalizar_producto
             producto_norm = normalizar_producto(producto_pesada)
 
-            # Buscar si algún CPE tiene fecha EXACTA con la pesada
-            tiene_match_exacto_fecha = any(cpe['fecha'] == fecha_pesada_norm for cpe in lista_cpes)
+            cpes_alternativas = []
+            if patente_norm in cpes:
+                for cpe_data in cpes[patente_norm]:
+                    dias = calcular_dias_diferencia(fecha_pesada_norm, cpe_data['fecha'])
+                    if 0 <= dias <= 7 and cpe_data['grano_tipo'] == producto_norm:
+                        cpes_alternativas.append({
+                            'numero_cpe': cpe_data['numero_cpe'],
+                            'fecha': cpe_data['fecha'],
+                            'dias': dias,
+                            'grano_tipo': cpe_data['grano_tipo']
+                        })
 
-            # Si hay match exacto de fecha, no hay ambigüedad
-            if tiene_match_exacto_fecha:
-                continue
-
-            # Buscar cuántos CPEs tienen el mismo producto
-            cpes_mismo_producto = [cpe for cpe in lista_cpes if cpe['grano_tipo'] == producto_norm]
-
-            # Si hay exactamente 1 CPE con ese producto, el producto desempata -> no hay ambigüedad
-            if len(cpes_mismo_producto) == 1:
-                continue
-
-            # SOLO agregar si hay ambigüedad real:
-            # - No hay match exacto de fecha Y
-            # - Hay >1 CPEs con el mismo producto (si hay 0, no hay opciones válidas)
-            # Solo mostrar CPEs que coinciden en producto (los otros no aplican)
-            if len(cpes_mismo_producto) > 1:
-                casos_revisar.append({
-                    'fila': idx,
-                    'patente': patente_pesada,
-                    'fecha_pesada': fecha_pesada,
-                    'producto_pesada': producto_pesada,
-                    'cpe_asignado': cpe_asignado,
-                    'cpes_disponibles': cpes_mismo_producto,  # Solo CPEs del mismo producto
-                    'cpes_mismo_producto': len(cpes_mismo_producto)
-                })
+            casos_revisar.append({
+                'fila': idx,
+                'patente': patente_pesada,
+                'fecha_pesada': fecha_pesada,
+                'producto_pesada': producto_pesada,
+                'neto': neto_pesada,
+                'cpe_asignado': cpe_asignado,
+                'cpes_alternativas': sorted(cpes_alternativas, key=lambda x: x['dias'])
+            })
 
         if not casos_revisar:
             return (
                 dbc.Alert([
                     html.I(className="fas fa-check-circle me-2"),
-                    "Todas las asignaciones se resolvieron por fecha exacta o producto único."
+                    "No hay casos pendientes de revisión."
                 ], color="success"),
                 html.Div([
                     dbc.Row([
@@ -1242,11 +1207,11 @@ def cargar_duplicados(n_clicks):
                         ], className="text-center"),
                         dbc.Col([
                             html.H4("0", className="text-success mb-0"),
-                            html.Small("Casos a revisar", className="text-muted")
+                            html.Small("Casos REVISAR", className="text-muted")
                         ], className="text-center"),
                     ])
                 ]),
-                html.P("No hay casos que necesiten revisión manual.", className="text-muted text-center py-4")
+                html.P("Todos los casos fueron resueltos automáticamente o marcados OK.", className="text-muted text-center py-4")
             )
 
         # Estadísticas
@@ -1258,21 +1223,22 @@ def cargar_duplicados(n_clicks):
                 ], className="text-center"),
                 dbc.Col([
                     html.H4(str(len(casos_revisar)), className="text-danger mb-0"),
-                    html.Small("Casos a revisar", className="text-muted")
+                    html.Small("Casos REVISAR", className="text-muted")
                 ], className="text-center"),
             ])
         ])
 
-        # URL base del sheet con gid para Pesadas Todos
+        # URL base del sheet
         PESADAS_SHEET_BASE = "https://docs.google.com/spreadsheets/d/1gTvXfwOsqbbc5lxpcsh8HMoB5F3Bix0qpdNKdyY5DME/edit#gid=0&range=A"
 
-        # Construir tabla con casos a revisar
+        # Construir tabla
         filas_tabla = []
         for caso in casos_revisar:
-            # Formatear los CPEs disponibles
+            # Formatear CPEs alternativas
             cpes_texto = []
-            for cpe_data in caso['cpes_disponibles']:
-                cpes_texto.append(f"{cpe_data['numero_cpe']} ({cpe_data['fecha']}, {cpe_data['grano_tipo'] or '-'})")
+            for alt in caso['cpes_alternativas']:
+                marca = "✓" if alt['numero_cpe'] == caso['cpe_asignado'] else ""
+                cpes_texto.append(f"{marca} {alt['numero_cpe']} ({alt['fecha']}, +{alt['dias']}d)")
 
             fila_num = caso['fila']
 
@@ -1281,6 +1247,7 @@ def cargar_duplicados(n_clicks):
                 html.Td(caso['patente']),
                 html.Td(caso['fecha_pesada']),
                 html.Td(caso['producto_pesada']),
+                html.Td(caso['neto']),
                 html.Td(caso['cpe_asignado'], className="text-primary fw-bold"),
                 html.Td(html.Ul([html.Li(t, style={'fontSize': '0.85em'}) for t in cpes_texto],
                                style={'marginBottom': '0', 'paddingLeft': '1rem'})),
@@ -1301,8 +1268,9 @@ def cargar_duplicados(n_clicks):
                 html.Th("Patente"),
                 html.Th("Fecha Pesada"),
                 html.Th("Producto"),
+                html.Th("Neto"),
                 html.Th("CPE Asignado"),
-                html.Th("CPEs Disponibles"),
+                html.Th("CPEs Alternativas (empate)"),
                 html.Th("Acciones")
             ])),
             html.Tbody(filas_tabla)
@@ -1311,7 +1279,7 @@ def cargar_duplicados(n_clicks):
         return (
             dbc.Alert([
                 html.I(className="fas fa-exclamation-triangle me-2"),
-                f"{len(casos_revisar)} pesadas sin match exacto de fecha - revisar manualmente"
+                f"{len(casos_revisar)} casos con empate de fecha - verificar manualmente"
             ], color="warning"),
             stats,
             tabla
